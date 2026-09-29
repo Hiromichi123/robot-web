@@ -1,0 +1,9 @@
+# 本地调试与系统垃圾（页面本体不需要这些）
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+*~
+*.bak
+*.orig
+*.swp
