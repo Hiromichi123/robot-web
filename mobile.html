@@ -332,6 +332,7 @@
               </div>
               <button type="button" class="behavior-pill is-brief" id="briefing-play-btn" title="语音播报所选作业交底场景(/rl_briefing/play)">▶ 作业交底</button>
               <button type="button" class="behavior-pill is-stopbrief" id="briefing-stop-btn" title="打断当前语音播报">■ 停止播报</button>
+              <span id="briefing-state" class="cam-state">播报节点未上线</span>
             </div>
           </section>
           <div id="movement-quadruped-chassis" hidden>
@@ -726,7 +727,7 @@
         </div>
       </aside>
     </main>
-    <script type="module" src="./js/main.js?v=1067"></script>
+    <script type="module" src="./js/main.js?v=1068"></script>
     <script>
       // 移动版布局:场景工具栏(模型/ws 地址/连接/录制/视图/注释/重心)整体下移,
       // 并入控制区、紧贴页签栏上方 —— 腾出场景顶部空间,控件靠近拇指。

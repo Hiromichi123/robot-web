@@ -858,6 +858,7 @@ addCheckStandListener((result) => {
 
 // ── 作业交底语音播报按钮 (/rl_briefing/play,支持多选按点选顺序连播) ──
 const briefingSceneEl = document.querySelector('#briefing-scenes');
+const briefingStateEl = document.querySelector('#briefing-state');
 const briefingPlayBtn = document.querySelector('#briefing-play-btn');
 const briefingStopBtn = document.querySelector('#briefing-stop-btn');
 const BRIEFING_SCENE_LABELS = { elevator: '电梯', forklift: '叉车', lifting: '吊装', warehouse: '仓库', height: '高处' };
@@ -908,16 +909,66 @@ briefingStopBtn?.addEventListener('click', () => {
     showToast('ROS 未连接', 'warn');
   }
 });
-// 播报状态反馈 → toast(相同内容 2s 内去重,防刷屏)
+// 播报状态反馈 → 常驻状态行 + toast(相同内容 2s 内去重,防刷屏)
+// 状态协议见 ~/ros2_ws/src/rodog.../rl_briefing/README.md:
+//   idle | playing: <场景> [(i/N)] | done: <场景列表> | stopped
+//   | not found: <x> | wav load failed: <x> | audio open failed: <dev> | interrupted: <x>
+const BRIEFING_STATE_STALE_MS = 4000;   // 节点 2Hz 心跳，4s 没来就算不在
+let _briefingLastAt = 0;                // 最近一次收到状态的**本地**时刻（不信狗端时间戳）
 let _lastBriefingStatusText = '';
 let _lastBriefingStatusAt = 0;
+
+/** 把状态原文翻译成给操作员看的一行（场景 id → 中文短名） */
+function _briefingStateText(raw) {
+  const t = String(raw || '').trim();
+  const sceneCn = (name) => BRIEFING_SCENE_LABELS[name] || name;
+  if (t === 'idle') return '就绪';
+  if (t.startsWith('playing: ')) {
+    // "playing: forklift (2/3)" / "playing: forklift"
+    const m = t.slice(9).match(/^(\S+)\s*(?:\((\d+\/\d+)\))?$/);
+    return m ? `播报中：${sceneCn(m[1])}${m[2] ? `（${m[2]}）` : ''}` : '播报中';
+  }
+  if (t.startsWith('nothing played:')) return '没播成：音频文件缺失';
+  if (t.startsWith('done:')) return '播报完成';
+  if (t === 'stopped') return '已停止播报';
+  if (t.startsWith('not found:')) return `缺音频：${t.slice(10).trim()}`;
+  if (t.startsWith('wav load failed:')) return `音频读不了：${t.slice(16).trim()}`;
+  if (t.startsWith('audio open failed:')) return `声卡打不开：${t.slice(18).trim()}`;
+  if (t.startsWith('interrupted:')) return `被打断：${sceneCn(t.slice(12).trim())}`;
+  if (t.startsWith('audio list:')) return '就绪';
+  return t;
+}
+
+function _renderBriefingState() {
+  if (!briefingStateEl) return;
+  const fresh = _briefingLastAt && Date.now() - _briefingLastAt < BRIEFING_STATE_STALE_MS;
+  if (!fresh) {
+    briefingStateEl.textContent = '播报节点未上线';
+    briefingStateEl.classList.remove('is-live');
+  }
+}
+
 addBriefingStatusListener((text) => {
   const now = Date.now();
-  if (text === _lastBriefingStatusText && now - _lastBriefingStatusAt < 2000) return;
-  _lastBriefingStatusText = text;
-  _lastBriefingStatusAt = now;
-  showToast(`🔊 ${text}`, 'info');
+  _briefingLastAt = now;
+  const t = String(text || '').trim();
+  // 空闲心跳只更新状态行，不弹 toast —— 2Hz 会把屏幕刷满
+  if (t !== 'idle' && t !== 'audio list:' && !t.startsWith('audio list:')) {
+    if (!(t === _lastBriefingStatusText && now - _lastBriefingStatusAt < 2000)) {
+      _lastBriefingStatusText = t;
+      _lastBriefingStatusAt = now;
+      showToast(`🔊 ${t}`, 'info');
+    }
+  }
+  if (briefingStateEl) {
+    briefingStateEl.textContent = _briefingStateText(t);
+    const bad = /^(not found|wav load failed|audio open failed)/.test(t);
+    const live = t.startsWith('playing:');
+    briefingStateEl.classList.toggle('is-live', live);
+    briefingStateEl.style.color = bad ? 'var(--c-danger, #e07070)' : '';
+  }
 });
+setInterval(_renderBriefingState, 1000);
 
 // 每次重新渲染控制面板(切模型后)也重新刷新禁用状态
 const _origRenderControlPanel_patched = false;
