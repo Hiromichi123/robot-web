@@ -619,6 +619,22 @@
 
             <section class="cartesian-section">
               <div class="section-heading">
+                <h2>点云地图</h2>
+                <span id="mission-map-state" class="cam-meta">未关联地图</span>
+              </div>
+              <div class="lidar-tools">
+                <select id="mission-map-select" class="ros-url-input" style="flex:1 1 auto; min-width:0"></select>
+                <button type="button" id="mission-map-reload" class="lidar-btn">刷新列表</button>
+              </div>
+              <div class="cam-stage" style="margin-top:8px">
+                <canvas id="mission-map-canvas" class="lidar-canvas"></canvas>
+                <div id="mission-map-placeholder" class="cam-placeholder">选一张地图 → 在点云上单击就能加一个「到点」航点<br>左键拖动旋转 · 滚轮缩放</div>
+              </div>
+              <p id="mission-map-hint" class="cam-meta">航点坐标取自点云本身，和狗端 goto 用的是同一个世界系</p>
+            </section>
+
+            <section class="cartesian-section">
+              <div class="section-heading">
                 <h2>步骤</h2>
                 <span class="cam-meta">点类型加到末尾，参数就地改</span>
               </div>
@@ -710,7 +726,7 @@
         </div>
       </aside>
     </main>
-    <script type="module" src="./js/main.js?v=1066"></script>
+    <script type="module" src="./js/main.js?v=1067"></script>
     <script>
       // 移动版布局:场景工具栏(模型/ws 地址/连接/录制/视图/注释/重心)整体下移,
       // 并入控制区、紧贴页签栏上方 —— 腾出场景顶部空间,控件靠近拇指。

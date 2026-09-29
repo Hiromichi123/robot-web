@@ -55,7 +55,7 @@ import { initAlarm, evaluateAlarms, clearAlarmMarkers, rebuildAlarmEditor, purge
 import { initCameraView, setCameraViewVisible } from './camera-view.js?v=4';
 import { initLidarView, setLidarViewVisible } from './lidar-view.js?v=7';
 import { initMapManager, setMapViewVisible } from './map-manager.js?v=3';
-import { initMissionView, setMissionViewVisible, setMissionMgrViewVisible } from './mission-view.js?v=3';
+import { initMissionView, setMissionViewVisible, setMissionMgrViewVisible } from './mission-view.js?v=4';
 
 /** 当前激活的控制面板标签:默认「话题调试」(第一页),刷新后恢复上次选择 */
 const CONTROL_TAB_STORAGE_KEY = 'web_sim_control_tab_v1';

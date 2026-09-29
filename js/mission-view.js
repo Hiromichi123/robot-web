@@ -35,6 +35,7 @@
  * 三个出口（init / setXMissionViewVisible / setMissionMgrViewVisible），不拆成两个文件。
  */
 import { getRosClient, addStatusListener } from './ros-bridge.js?v=980';
+import { createMissionMap, parsePcd } from './mission-map.js?v=1';
 
 const MISSION_TOPIC        = '/dog/mission';
 const MISSION_CMD_TOPIC    = '/dog/mission_cmd';
@@ -71,7 +72,10 @@ const STEP_TYPES = [
           { k: 'y', label: 'y', unit: 'm', def: 0.0, step: 0.1 },
           { k: 'yaw', label: '航向', unit: 'rad', def: 0, step: 0.1 },
           { k: 'goto_timeout_s', label: '超时', unit: 's', def: 60, step: 5 },
-      ] },
+      ],
+      // z 只用于在 3D 视图里把航点标记放到点击的高度上；**不进 JSON**
+      // （planOf 只导出 fields，extra 不会出去 —— 狗端的 goto 是 2D 的）
+      extra: ['z'] },
     { type: 'wait', label: '等待',
       fields: [{ k: 'duration_s', label: '时长', unit: 's', def: 5, step: 1 }] },
     { type: 'getdown', label: '趴下',
@@ -108,6 +112,12 @@ let loadedName = '';
 let draft = null;
 /** 进编排层时那份任务的原名（'' = 新增）。保存时用它判断"是不是改了已加载那个的名字" */
 let draftOrigin = '';
+/** 点云地图视图（编辑器里那个）—— 懒建：真用到编辑器时才创建 WebGL 上下文 */
+let mapView = null;
+/** 当前已装进视图的地图名（避免重复加载同一张） */
+let mapLoadedName = '';
+/** 地图列表（来自 webserver 的 /api/maps）*/
+let mapList = [];
 /** 任务管理的两个子视图：'list' | 'editor' */
 let mgrView = 'list';
 
@@ -158,6 +168,10 @@ function normalizeSteps(raw) {
         for (const f of def.fields) {
             if (src[f.k] != null) params[f.k] = num(src[f.k], f.def);
         }
+        // 界面专用的额外字段（如 goto 的 z）：存是要存的，导出 JSON 时不会带上
+        for (const k of (def.extra || [])) {
+            if (src[k] != null) params[k] = num(src[k], 0);
+        }
         return { type: s.type, params };
     }).filter(Boolean);
 }
@@ -178,7 +192,7 @@ function templateMission() {
 
 /** 把 {name, confirm, steps} 变成下发给狗端的那份 JSON 对象 */
 function planOf(m) {
-    return {
+    const plan = {
         version: 1,
         name: String(m.name || '未命名任务').slice(0, 32),
         confirm: m.confirm === 'none' ? 'none' : 'each',
@@ -189,6 +203,9 @@ function planOf(m) {
             return out;
         }),
     };
+    // 这份任务的航点是在哪张点云图上取的（自描述；狗端解析器忽略未知键）
+    if (m.map) plan.map = String(m.map).slice(0, 128);
+    return plan;
 }
 
 function findMission(name) { return missions.find((m) => m.name === name) || null; }
@@ -213,6 +230,104 @@ function lint(steps) {
         }
     });
     return warns;
+}
+
+// ── 点云地图 / 航点 ──────────────────────────────────────
+/**
+ * 懒建地图视图。只有真进编辑器才创建 WebGL 上下文 —— 两个页签都不看的时候
+ * 不该白白占一份 GPU 资源。
+ */
+function ensureMapView() {
+    if (mapView || !els.mapCanvas) return mapView;
+    mapView = createMissionMap({
+        canvas: els.mapCanvas,
+        onPick: (x, y, z) => {
+            if (!draft) return;
+            // 点一下 = 往任务末尾加一个「到点」。yaw 沿用已有 goto 的（多数场景是
+            // "朝着目标走"就够），要改就在步骤列表里改那个数字。
+            const lastGoto = [...draft.steps].reverse().find((s) => s.type === 'goto');
+            const step = makeStep('goto');
+            step.params.x = Number(x.toFixed(3));
+            step.params.y = Number(y.toFixed(3));
+            step.params.yaw = lastGoto ? lastGoto.params.yaw : 0;
+            step.params.z = Number(z.toFixed(3));
+            draft.steps.push(step);
+            renderEditor();
+        },
+        onHint: (text) => { if (els.mapHint) els.mapHint.textContent = text; },
+    });
+    return mapView;
+}
+
+/** 拉一次地图列表（webserver 的 /api/maps），填进下拉框 */
+async function refreshMapList() {
+    if (!els.mapSelect) return;
+    try {
+        const res = await fetch('/api/maps', { cache: 'no-store' });
+        const data = await res.json();
+        mapList = Array.isArray(data.maps) ? data.maps : [];
+    } catch (e) {
+        mapList = [];
+        if (els.mapState) els.mapState.textContent = '读不到地图列表（webserver 起了吗？）';
+        return;
+    }
+    const cur = draft && draft.map ? draft.map : '';
+    els.mapSelect.innerHTML = '<option value="">（不关联地图）</option>' +
+        mapList.map((m) => {
+            const pts = m.points ? `${Number(m.points).toLocaleString()} 点` : '';
+            const when = m.started_at ? String(m.started_at).replace('T', ' ').slice(5) : '';
+            const extra = [pts, when].filter(Boolean).join(' · ');
+            return `<option value="${esc(m.name)}"${m.name === cur ? ' selected' : ''}>` +
+                   `${esc(m.name.replace(/^map_/, '').replace(/\.pcd$/, ''))}` +
+                   `${extra ? '（' + esc(extra) + '）' : ''}</option>`;
+        }).join('');
+    if (els.mapState) {
+        els.mapState.textContent = mapList.length
+            ? `${mapList.length} 张可选`
+            : '板上还没有地图（去「雷达」页签建一张）';
+    }
+}
+
+/** 把某张 pcd 装进视图（draft.map 也记下来） */
+async function loadMapIntoView(name) {
+    if (!draft) return;
+    const view = ensureMapView();
+    if (!view) return;
+
+    draft.map = name || '';
+    if (!name) {
+        mapLoadedName = '';
+        view.clear();
+        if (els.mapPlaceholder) els.mapPlaceholder.hidden = false;
+        if (els.mapState) els.mapState.textContent = '未关联地图';
+        updateWaypointMarkers();       // 没图也把已有航点画出来（z 为 0）
+        return;
+    }
+
+    if (els.mapPlaceholder) els.mapPlaceholder.hidden = true;
+    if (els.mapState) els.mapState.textContent = `加载 ${name} …`;
+    try {
+        const res = await fetch(`/api/maps/${encodeURIComponent(name)}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const cloud = parsePcd(await res.arrayBuffer());
+        view.setCloud(cloud);
+        mapLoadedName = name;
+        if (els.mapState) els.mapState.textContent = `${name} · ${cloud.count.toLocaleString()} 点`;
+        updateWaypointMarkers();
+    } catch (e) {
+        mapLoadedName = '';
+        view.clear();
+        if (els.mapState) els.mapState.textContent = `加载失败：${e.message}`;
+    }
+}
+
+/** 把当前草稿里的「到点」画成小球（点云上的航点） */
+function updateWaypointMarkers() {
+    if (!mapView) return;
+    const ws = (draft ? draft.steps : [])
+        .filter((s) => s.type === 'goto')
+        .map((s) => ({ x: num(s.params.x), y: num(s.params.y), z: num(s.params.z, 0) }));
+    mapView.setWaypoints(ws);
 }
 
 // ── ROS 话题 ─────────────────────────────────────────────
@@ -498,6 +613,8 @@ function renderEditor() {
         if (els.stepCount) els.stepCount.textContent = `${draft.steps.length} 步`;
     }
 
+    updateWaypointMarkers();
+
     const warns = lint(draft.steps);
     if (els.lint) {
         els.lint.textContent = warns.length ? '⚠ ' + warns.join('；') : '';
@@ -509,8 +626,17 @@ function showMgrView(which) {
     mgrView = which;
     if (els.mgrListView) els.mgrListView.hidden = which !== 'list';
     if (els.editorView) els.editorView.hidden = which !== 'editor';
-    if (which === 'editor') renderEditor();
-    else { renderSaved(); }
+    if (which === 'editor') {
+        renderEditor();
+        // 画布在被隐藏时尺寸是 0，显示出来必须重新对齐（Three.js 不会自己知道）
+        ensureMapView();
+        mapView?.resize();
+        refreshMapList();
+        // 这份任务原来关联过地图就自动装回来
+        const want = draft && draft.map ? draft.map : '';
+        if (want !== mapLoadedName) loadMapIntoView(want);
+        else updateWaypointMarkers();
+    } else { renderSaved(); }
     const panelEl = document.querySelector('#control-panel');
     if (panelEl) panelEl.scrollTop = 0;   // 两层内容长度差很多，留着旧位置会看着像没切换
 }
@@ -555,6 +681,7 @@ function saveDraft() {
     const entry = {
         name,
         confirm: draft.confirm,
+        map: draft.map || '',            // 关联的点云地图（只给界面用，狗端不认）
         // 存**编排格式**（与 draft/编辑器一致）。别存 planOf() 的结果 ——
         // 那是给狗端的平铺格式，存回去下次读出来 `s.params` 就是 undefined（踩过）。
         steps: normalizeSteps(draft.steps),
@@ -638,6 +765,14 @@ export function initMissionView() {
         lint:        document.querySelector('#mission-lint'),
         btnSave:     document.querySelector('#mission-btn-save'),
         btnCancel:   document.querySelector('#mission-btn-cancel'),
+
+        // 子页面：点云地图与航点
+        mapSelect:      document.querySelector('#mission-map-select'),
+        mapReload:      document.querySelector('#mission-map-reload'),
+        mapCanvas:      document.querySelector('#mission-map-canvas'),
+        mapPlaceholder: document.querySelector('#mission-map-placeholder'),
+        mapState:       document.querySelector('#mission-map-state'),
+        mapHint:        document.querySelector('#mission-map-hint'),
     };
     // 两个面板都没在（例如 mobile.html 没同步改）就直接退出，不抛异常
     if (!els.execPanel && !els.mgrPanel) return;
@@ -666,6 +801,7 @@ export function initMissionView() {
                 name: missions[i].name,
                 confirm: missions[i].confirm === 'none' ? 'none' : 'each',
                 steps: normalizeSteps(missions[i].steps),   // 顺带深拷贝，改草稿不动原任务
+                map: missions[i].map || '',
             };
             draftOrigin = missions[i].name;
             showMgrView('editor');
@@ -685,6 +821,7 @@ export function initMissionView() {
         draft = templateMission();
         draft.name = uniqueName(draft.name);
         draftOrigin = '';                 // 新增：没有"原名"
+        draft.map = '';
         showMgrView('editor');
     });
 
@@ -803,9 +940,16 @@ export function initMissionView() {
         const i = Number(inp.dataset.idx);
         if (!Number.isInteger(i) || i < 0 || i >= draft.steps.length) return;
         draft.steps[i].params[inp.dataset.key] = inp.value;
+        updateWaypointMarkers();
     });
 
-    // ── 子页面出口：保存 / 保存并下发 / 取消 ─────────────
+    // ── 子页面：点云地图 ─────────────────────────────────
+    els.mapSelect?.addEventListener('change', () => {
+        loadMapIntoView(els.mapSelect.value);
+    });
+    els.mapReload?.addEventListener('click', () => refreshMapList());
+
+    // ── 子页面出口：保存 / 取消 ──────────────────────────
     els.btnSave?.addEventListener('click', () => {
         if (!saveDraft()) return;
         showMgrView('list');
