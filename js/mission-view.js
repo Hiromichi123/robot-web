@@ -333,7 +333,15 @@ function updateWaypointMarkers() {
 // ── ROS 话题 ─────────────────────────────────────────────
 function ensureTopics() {
     const ros = getRosClient();
-    if (!ros || txMission || txCmd || rxStatus) return false;
+    if (!ros) return false;
+    // 已经建好 → 直接算成功。原来写的是
+    //   `if (!ros || txMission || txCmd || rxStatus) return false;`
+    // 语义反了：applyDesired() 在**刚连上 ros 时就调过一次** ensureTopics()，
+    // 于是操作员点「下发执行」时三个话题早已非空 → 这里返回 false →
+    // sendLoaded()/sendCmd() 在 `if (!ensureTopics()) return` 处静默返回，
+    // 一个字节都不发。表现就是"点了没反应 / 抓不到任何 WebSocket 帧"
+    // （2026-09-30 实机定位；同一个门也把「继续/放弃/急停」三个按钮一起锁死了）。
+    if (txMission && txCmd && rxStatus) return true;
 
     const mk = (name, cb) => {
         const t = new ROSLIB.Topic({
