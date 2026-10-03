@@ -4,11 +4,11 @@
 浏览器访问 `http://192.168.8.137:8080/`，页面里的 ROS 地址填 `ws://192.168.8.137:9090`。
 
 rosbridge 那一路由狗端仓库的 `core_2026/launch/slam_only.launch.py` 提供（雷达 + Point-LIO +
-小脑桥 `dog_ws_bridge` + rosbridge），**它和 `dog_node` 都要另外起**。
+小脑通信桥 `dog_ros2_bridge` + rosbridge），**它和 `dog_node` 都要另外起**。
 
 ## 怎么跑
 
-板上没有 node，静态文件由 `~/webserver.py`（**不在本仓库里**）在 8080 端口托管 ——
+板上没有 node，静态文件由本仓库根下的 `webserver.py` 在 8080 端口托管（入口仍是 `~/webserver.sh`，2026-10-03 收进仓库）——
 它同时还提供「地图管理」页签要用的 `/api/maps` 接口（列目录/读取/删除 `~/lidar_maps` 下的 pcd）。
 浏览器碰不到文件系统，所以那个后端不能省。
 
@@ -30,6 +30,7 @@ rosbridge 那一路由狗端仓库的 `core_2026/launch/slam_only.launch.py` 提
 链路：页面 → `/dog/mission`（整份 JSON）→ 狗端 `dog_node` 解析执行 →
 `/dog/mission_status`（变化时 + 2Hz 心跳）回进度 → 页面的「继续/放弃/急停」走 `/dog/mission_cmd`。
 **协议以狗端仓库的 `MISSION_PROTOCOL.md` 为准**，改一边必须同步另一边。
+命令生命周期状态码 + 2Hz 心跳（`cmd_state` / `heartbeat`，console 页在用）见本仓库 `docs/CMD_STATE_PROTOCOL.md`。
 
 ## ⚠️ 改文件必读：`?v=` 缓存约定
 
@@ -49,4 +50,6 @@ rosbridge 那一路由狗端仓库的 `core_2026/launch/slam_only.launch.py` 提
   其它模块只从它取连接或调用它的函数
 - `css/`、`vendor/`（three.js、roslib，第三方，一般不碰）
 - `model/2/` —— 机器狗模型的网格（46MB，**必须留着**，否则 3D 视图里没有狗）
+- `webserver.py` —— 板上托管的服务器（静态 + `/api/maps`），由 `~/webserver.sh` 起；静态根=脚本所在目录
+- `docs/` —— 协议文档（`CMD_STATE_PROTOCOL.md`）
 - `js/_mock-rosbridge.js`、`js/_dev-server.js` —— 本地调试用的模拟 rosbridge（不参与正式功能）
