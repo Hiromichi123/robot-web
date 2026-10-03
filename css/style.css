@@ -170,6 +170,21 @@ button { cursor: pointer; }
 .ros-connecting { background: rgba(78, 213, 198, 0.12); color: var(--c-accent); }
 .ros-online { background: rgba(78, 213, 198, 0.2); color: var(--c-accent); font-weight: 700; }
 .ros-error { background: rgba(224, 112, 112, 0.18); color: var(--c-danger); }
+/* 电池徽标（/bms/state，来源：小脑 BLE 读 BMS；见 js/battery.js） */
+.battery-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  background: rgba(122, 141, 165, 0.16);
+  color: var(--c-muted);
+  cursor: default;
+}
+.battery-badge.is-ok { background: rgba(78, 213, 198, 0.14); color: var(--c-accent); }
+.battery-badge.is-warn { background: rgba(255, 196, 0, 0.16); color: #ffc400; }
+.battery-badge.is-low { background: rgba(224, 112, 112, 0.22); color: var(--c-danger); font-weight: 700; }
 .ros-pos-source select {
   background: rgba(24, 37, 58, 0.96); color: #f4f7fb;
   border: 1px solid var(--c-input-border);

@@ -15,6 +15,10 @@
  * rgb 以 float 存的是**打包后的位**（PCL 的老规矩），没颜色的点写 NaN。
  * 字段按头里的 FIELDS/SIZE/TYPE/COUNT 泛化解析，不假设固定布局。
  *
+ * 显示约定：世界系是 z-up，相机 up=(0,0,1)、参考网格铺在 XY 平面
+ * （红=x 绿=y 蓝=z）—— 与雷达页/地图管理页/机器人视图同一套约定。
+ * 显示朝向不影响取点：onPick 给的是点云原始世界坐标。
+ *
  * 单导入方模块（仅 mission-view.js 引用），可独立 ?v= 版本号。
  */
 import * as THREE from 'three';
@@ -47,6 +51,7 @@ export function createMissionMap({ canvas, onPick, onHint }) {
     scene.background = new THREE.Color(0x060b12);
     const camera = new THREE.PerspectiveCamera(55, 1, 0.05, 5000);
     camera.position.set(4, -4, 4);
+    camera.up.set(0, 0, 1); // z-up(世界系=ROS 坐标,同雷达页/地图管理页/机器人视图)
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
@@ -64,6 +69,7 @@ export function createMissionMap({ canvas, onPick, onHint }) {
     const markerGroup = new THREE.Group();
     scene.add(markerGroup);
     let axes = null;
+    let grid = null;                      // 参考地面网格（XY 平面,红绿轴所在平面）
 
     controls.addEventListener('change', render);
 
@@ -90,6 +96,12 @@ export function createMissionMap({ canvas, onPick, onHint }) {
             pointsGeo = null;
         }
         if (axes) { scene.remove(axes); axes = null; }
+        if (grid) {
+            scene.remove(grid);
+            grid.geometry.dispose();
+            grid.material.dispose();
+            grid = null;
+        }
         markerGroup.clear();
         bbox = null;
         render();
@@ -136,6 +148,18 @@ export function createMissionMap({ canvas, onPick, onHint }) {
         scene.add(axes);
 
         const c = bbox.getCenter(new THREE.Vector3());
+
+        // 参考地面网格：铺在 XY 平面（=地图的 xy 地面,红绿轴所在平面）。
+        // GridHelper 默认躺在自己的 XZ 平面，绕 X 转 90° 才转过来；
+        // 尺寸取"盖住整张图"的整十米，中心跟着地图中心走。
+        const gridSize = Math.max(20, Math.ceil(Math.max(size.x, size.y) * 1.5 / 10) * 10);
+        grid = new THREE.GridHelper(gridSize, Math.round(gridSize), 0x2a4458, 0x18262f);
+        grid.rotation.x = Math.PI / 2;
+        grid.position.set(c.x, c.y, 0.002); // 抬一点,避免与贴地点的 z-fighting
+        grid.material.transparent = true;
+        grid.material.opacity = 0.35;
+        grid.material.depthWrite = false;
+        scene.add(grid);
         controls.target.copy(c);
         camera.position.set(c.x - diag * 0.45, c.y - diag * 0.55, c.z + diag * 0.6);
         camera.near = diag / 2000;

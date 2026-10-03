@@ -67,7 +67,7 @@
       <a href="/" target="_blank"
          style="color:var(--accent);margin-left:14px;text-decoration:none;border:1px solid var(--line);padding:2px 9px;border-radius:10px">🤖 网页机器人仿真</a></div>
   </div>
-  <div class="hint">页面只读订阅，不会自动发任何动作指令；所有运动指令均需手动点击。急停随时点红色【PASSIVE 停】。</div>
+  <div class="hint">页面只读订阅，不会自动发任何动作指令；所有运动指令均需手动点击。急停随时点【↓ 趴下】（getdown）；passive 已从 ROS 接口隐藏（2026-10-01）。</div>
 </div>
 
 <div class="row">
@@ -99,9 +99,8 @@
     <div class="panel">
       <h2>FSM 指令 (/rl_real/command)</h2>
       <div class="btns">
-        <button class="danger" data-cmd="passive">■ PASSIVE 停 (P)</button>
         <button class="go" data-cmd="getup">↑ 起立 (0)</button>
-        <button class="warn" data-cmd="getdown">↓ 趴下 (9)</button>
+        <button class="danger" data-cmd="getdown">↓ 趴下 (9)</button>
         <button class="go" data-cmd="locomotion">行走模式 (1)</button>
       </div>
       <div class="btns">

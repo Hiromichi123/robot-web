@@ -198,18 +198,23 @@ function initThree() {
   scene = new THREE.Scene();
   camera3d = new THREE.PerspectiveCamera(60, 1, 0.05, 500);
   camera3d.position.set(8, -8, 6);
+  camera3d.up.set(0, 0, 1); // z-up(世界系=ROS 坐标,同 scene.js 的机器人视图)
 
   controls = new OrbitControls(camera3d, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.12;
   controls.maxDistance = 200;
 
-  // 点云是 z-up（世界系 camera_init），three 默认 y-up：整组绕 X 轴 -90°
+  // 世界系是 z-up(Point-LIO camera_init):数据组不旋转,世界坐标=ROS 坐标
+  // (红=x 绿=y 蓝=z),取景数学因此可以直接用点云坐标。
   dataGroup = new THREE.Group();
-  dataGroup.rotation.x = -Math.PI / 2;
   scene.add(dataGroup);
 
+  // 网格铺在 XY 平面(=地图的 xy 地面,红绿轴所在平面):
+  // GridHelper 默认躺在自己的 XZ 平面,绕 X 转 90° 才转过来。
   const grid = new THREE.GridHelper(60, 60, 0x2a4458, 0x18262f);
+  grid.rotation.x = Math.PI / 2;
+  grid.position.z = 0.002; // 抬一点,避免与贴地点的 z-fighting
   grid.material.transparent = true;
   grid.material.opacity = 0.5;
   grid.material.depthWrite = false;
@@ -269,9 +274,12 @@ function frameCamera() {
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
   const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 2);
   controls.target.set(cx, cy, cz);
-  // 数据组绕 X 转了 -90°，相机在世界系里；给个能看全的斜俯视角
+  // 世界坐标=ROS 坐标(z-up),相机直接放在地图中心的斜上方(z 抬 0.9 span)取全景
   camera3d.position.set(cx + span * 0.8, cy - span * 1.1, cz + span * 0.9);
   controls.update();
+  // 给"俯视"按钮留着用:目标点 + 地图跨度
+  loaded.center = { x: cx, y: cy, z: cz };
+  loaded.span = span;
   return { minX, maxX, minY, maxY, minZ, maxZ };
 }
 
@@ -428,7 +436,15 @@ export function initMapManager() {
     controls.update();
   };
   els.btnReset?.addEventListener('click', () => (loaded ? frameCamera() : setView(8, -8, 6)));
-  els.btnTop?.addEventListener('click', () => setView(0.01, 0.01, 20));
+  // 俯视:相机挪到**当前目标点**正上方(否则地图不在原点时视野跑偏),
+  // y 用 -0.02 微偏移而不是精确 0 —— 视线与 camera.up(0,0,1) 平行会退化。
+  // 屏幕上方=+y(绿)、右侧=+x(红),就是"地图上的正俯视平面图"。
+  els.btnTop?.addEventListener('click', () => {
+    const c = loaded?.center ?? { x: 0, y: 0, z: 0 };
+    const dist = loaded?.span ? Math.max(10, loaded.span * 1.2) : 20;
+    controls.target.set(c.x, c.y, c.z);
+    setView(c.x, c.y - 0.02, c.z + dist);
+  });
   // 三档循环:高度 → 反射率 → 真彩(有颜色的点用真彩,没有的回落高度)
   els.btnColor?.addEventListener('click', () => {
     colorMode = colorMode === 'height' ? 'intensity'

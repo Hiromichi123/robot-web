@@ -35,7 +35,7 @@
  * 三个出口（init / setXMissionViewVisible / setMissionMgrViewVisible），不拆成两个文件。
  */
 import { getRosClient, addStatusListener } from './ros-bridge.js?v=980';
-import { createMissionMap, parsePcd } from './mission-map.js?v=1';
+import { createMissionMap, parsePcd } from './mission-map.js?v=2';
 
 const MISSION_TOPIC        = '/dog/mission';
 const MISSION_CMD_TOPIC    = '/dog/mission_cmd';

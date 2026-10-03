@@ -2,13 +2,17 @@
  * 雷达页签模块(Livox MID-360)+ 建图开关。
  *
  * 点云: /lidar_recorder/frame  sensor_msgs/msg/PointCloud2, ~10Hz, 约 5000 点/帧
- *      **只在建图开关打开时才有**。来源是板上 lidar_recorder 节点转发的
- *      Point-LIO 世界系逐帧点云(/cloud_registered,已去畸变、已按位姿拼好),
- *      字段 x,y,z,intensity 均 float32、point_step=16;
+ *      **只在建图开关打开时才有**。来源是板上 lidar_recorder 节点:它订
+ *      /cloud_registered_body(body 系、IMU 去畸变)并用 /aft_mapped_to_init
+ *      位姿自己变换到世界系,和节点落盘的 pcd 是同一批点(不用 /cloud_registered
+ *      ——那份被 filter_size_surf=0.5 体素降采样过,一面墙只剩几十个点)。
+ *      字段 x,y,z,intensity,rgb 均 float32、point_step=20(rgb 是 PCL 打包位,无色为 NaN);
  *      解码器按 msg.fields 的 offset/datatype 泛化解析,兼容 uint8 intensity
  *      和 Point-LIO 原生那种更宽的 PointXYZINormal 布局。
- *      因为已经是世界系,"累加建图"直接叠就是全局一致的地图(机器人移动也不糊),
- *      和节点落盘的 pcd 是同一批点。
+ *      因为已经是世界系,"累加建图"直接叠就是全局一致的地图(机器人移动也不糊)。
+ *
+ * 显示约定: 世界系是 z-up(Point-LIO camera_init),相机 up=(0,0,1)、网格铺在
+ *      XY 平面(红=x 绿=y 蓝=z)—— 与 scene.js 的机器人视图同一套约定。
  * IMU: /livox/imu  sensor_msgs/msg/Imu, 200Hz 内置 BMI088(orientation 通常为空,姿态由重力估计)。
  *      它不属点云,仍按「雷达页签可见且在线」订阅,不受建图开关影响。
  *
@@ -277,6 +281,7 @@ function initThree() {
   scene = new THREE.Scene();
   camera3d = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
   camera3d.position.set(5.5, -5.5, 4.2);
+  camera3d.up.set(0, 0, 1); // z-up(世界系=ROS 坐标,同 scene.js 的机器人视图)
 
   controls = new OrbitControls(camera3d, canvas);
   controls.enableDamping = true;
@@ -285,13 +290,16 @@ function initThree() {
   controls.maxDistance = 80;
   controls.target.set(0, 0, 0);
 
-  // 雷达数据是 z-up,Three 默认 y-up:全部数据放进绕 X 轴 -90° 的组(local z→world y)
+  // 世界系是 z-up(Point-LIO camera_init):数据组不旋转,世界坐标=ROS 坐标
+  // (红=x 绿=y 蓝=z)。dataGroup 仍保留 —— 自动旋转就是转它的 z(竖直轴)。
   dataGroup = new THREE.Group();
-  dataGroup.rotation.x = -Math.PI / 2;
   scene.add(dataGroup);
 
-  // 地面网格(传感器原点为中心)
+  // 地面网格(传感器原点为中心)。GridHelper 默认躺在自己的 XZ 平面,
+  // 绕 X 转 90° 才落进 XY 平面(=地图的 xy 地面,红绿轴所在平面)。
   const grid = new THREE.GridHelper(40, 40, 0x2a4458, 0x18262f);
+  grid.rotation.x = Math.PI / 2;
+  grid.position.z = 0.002; // 抬一点,避免与贴地点的 z-fighting
   grid.material.transparent = true;
   grid.material.opacity = 0.55;
   grid.material.depthWrite = false;
@@ -758,9 +766,11 @@ export function initLidarView() {
     controls.target.set(tx, ty, tz);
     controls.update();
   };
+  // 相机预设(z-up 世界):俯视沿 -z 看,屏幕上方=+y(绿)、右侧=+x(红)。
+  // y 用 -0.02 微偏移而不是精确 0 —— 视线与 camera.up(0,0,1) 平行会退化。
   els.btnReset?.addEventListener('click', () => setView(5.5, -5.5, 4.2));
-  els.btnTop?.addEventListener('click', () => setView(0.01, 0.01, 14));
-  els.btnSide?.addEventListener('click', () => setView(0.01, -10, 0.6));
+  els.btnTop?.addEventListener('click', () => setView(0, -0.02, 14));
+  els.btnSide?.addEventListener('click', () => setView(0, -14, 2.5));
   els.btnRotate?.addEventListener('click', () => {
     autoRotate = !autoRotate;
     els.btnRotate.classList.toggle('is-active', autoRotate);

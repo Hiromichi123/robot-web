@@ -53,9 +53,10 @@ import {
 import { initRosDebug, onRosDebugTabShown } from './ros-debug.js?v=975';
 import { initAlarm, evaluateAlarms, clearAlarmMarkers, rebuildAlarmEditor, purgeAlarmRecordMeta } from './alarm.js?v=971';
 import { initCameraView, setCameraViewVisible } from './camera-view.js?v=4';
-import { initLidarView, setLidarViewVisible } from './lidar-view.js?v=7';
-import { initMapManager, setMapViewVisible } from './map-manager.js?v=3';
-import { initMissionView, setMissionViewVisible, setMissionMgrViewVisible } from './mission-view.js?v=5';
+import { initLidarView, setLidarViewVisible } from './lidar-view.js?v=8';
+import { initMapManager, setMapViewVisible } from './map-manager.js?v=4';
+import { initMissionView, setMissionViewVisible, setMissionMgrViewVisible } from './mission-view.js?v=6';
+import { initBattery } from './battery.js?v=1';
 
 /** 当前激活的控制面板标签:默认「话题调试」(第一页),刷新后恢复上次选择 */
 const CONTROL_TAB_STORAGE_KEY = 'web_sim_control_tab_v1';
@@ -1020,6 +1021,8 @@ initLidarView();
 initMapManager();
 // 任务编排页签同理
 initMissionView();
+// 电池徽标(/bms/state,来自小脑 BLE 读 BMS)
+initBattery();
 
 // 立即应用持久化的页签,避免刷新后先闪一下默认「话题调试」;
 // 此时模型可能未加载,重建逻辑均有 try/catch,模型就绪后会再应用一次

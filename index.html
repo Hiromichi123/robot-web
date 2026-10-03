@@ -17,7 +17,7 @@
         if (mobile) location.replace('./mobile.html');
       })();
     </script>
-    <link rel="stylesheet" href="./css/style.css?v=1027" />
+    <link rel="stylesheet" href="./css/style.css?v=1028" />
     <script type="importmap">
       {
         "imports": {
@@ -44,6 +44,7 @@
         <div class="topbar">
           <div class="brand">网页机器人仿真</div>
           <div id="load-status" class="load-status">读取机器人模型...</div>
+          <span id="battery-badge" class="battery-badge is-stale" title="电池状态（等待数据）">🔋 --</span>
           <span id="ros-status" class="ros-status ros-offline" title="ROS 连接状态">未连接</span>
         </div>
         <div class="scene-tools" aria-label="视图控制">
@@ -715,6 +716,6 @@
         </div>
       </aside>
     </main>
-    <script type="module" src="./js/main.js?v=1069"></script>
+    <script type="module" src="./js/main.js?v=1071"></script>
   </body>
 </html>

@@ -17,7 +17,7 @@
         if (!mobile) location.replace('./index.html');
       })();
     </script>
-    <link rel="stylesheet" href="./css/style.css?v=1027" />
+    <link rel="stylesheet" href="./css/style.css?v=1028" />
     <link rel="stylesheet" href="./css/style-mobile.css?v=1031" />
     <!-- 关键结构规则内联兜底:外链 CSS 若被手机端缓存污染,此块保证
          ① 移动控制页 hidden 时真正隐藏(旧版裸 ID 规则会压过 .control-view[hidden],
@@ -54,6 +54,7 @@
         <div class="topbar">
           <div class="brand">网页机器人仿真</div>
           <div id="load-status" class="load-status">读取机器人模型...</div>
+          <span id="battery-badge" class="battery-badge is-stale" title="电池状态（等待数据）">🔋 --</span>
           <span id="ros-status" class="ros-status ros-offline" title="ROS 连接状态">未连接</span>
         </div>
         <div class="scene-tools" aria-label="视图控制">
@@ -727,7 +728,7 @@
         </div>
       </aside>
     </main>
-    <script type="module" src="./js/main.js?v=1069"></script>
+    <script type="module" src="./js/main.js?v=1071"></script>
     <script>
       // 移动版布局:场景工具栏(模型/ws 地址/连接/录制/视图/注释/重心)整体下移,
       // 并入控制区、紧贴页签栏上方 —— 腾出场景顶部空间,控件靠近拇指。
