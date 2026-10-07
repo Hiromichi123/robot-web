@@ -53,14 +53,15 @@ import {
 import { initRosDebug, onRosDebugTabShown } from './ros-debug.js?v=975';
 import { initAlarm, evaluateAlarms, clearAlarmMarkers, rebuildAlarmEditor, purgeAlarmRecordMeta } from './alarm.js?v=971';
 import { initCameraView, setCameraViewVisible } from './camera-view.js?v=4';
-import { initLidarView, setLidarViewVisible } from './lidar-view.js?v=8';
+import { initLidarView, setLidarViewVisible } from './lidar-view.js?v=12';
 import { initMapManager, setMapViewVisible } from './map-manager.js?v=4';
 import { initMissionView, setMissionViewVisible, setMissionMgrViewVisible } from './mission-view.js?v=6';
 import { initBattery } from './battery.js?v=1';
+import { initDebugView, setDebugViewVisible } from './debug-view.js?v=3';
 
 /** 当前激活的控制面板标签:默认「话题调试」(第一页),刷新后恢复上次选择 */
 const CONTROL_TAB_STORAGE_KEY = 'web_sim_control_tab_v1';
-const VALID_CONTROL_TABS = ['rosdebug', 'alarm', 'config', 'movement', 'joint', 'cartesian', 'curves', 'dashboard', 'camera', 'lidar', 'maps', 'mission', 'mission-mgr'];
+const VALID_CONTROL_TABS = ['rosdebug', 'alarm', 'config', 'movement', 'joint', 'cartesian', 'curves', 'dashboard', 'camera', 'lidar', 'maps', 'mission', 'mission-mgr', 'debug'];
 function loadPersistedControlTab() {
   try {
     const saved = localStorage.getItem(CONTROL_TAB_STORAGE_KEY);
@@ -400,6 +401,7 @@ function setControlTab(tab) {
   document.querySelector('#maps-control-view').hidden = tab !== 'maps';
   document.querySelector('#mission-control-view').hidden = tab !== 'mission';
   document.querySelector('#mission-mgr-control-view').hidden = tab !== 'mission-mgr';
+  document.querySelector('#debug-control-view').hidden = tab !== 'debug';
   document.querySelector('#rosdebug-control-view').hidden = tab !== 'rosdebug';
   document.querySelector('#alarm-control-view').hidden    = tab !== 'alarm';
 
@@ -447,6 +449,8 @@ function setControlTab(tab) {
   try { setMissionViewVisible(tab === 'mission'); } catch { /* 忽略 */ }
   // 任务管理页签:切回来重读一遍本地任务列表
   try { setMissionMgrViewVisible(tab === 'mission-mgr'); } catch { /* 忽略 */ }
+  // 调试页签:可见时才轮询启动状态与日志(1s/2s),切走停
+  try { setDebugViewVisible(tab === 'debug'); } catch { /* 忽略 */ }
 
   // 底盘控制器仅在移动控制模式启用
   const isMovement = tab === 'movement';
@@ -1023,6 +1027,8 @@ initMapManager();
 initMissionView();
 // 电池徽标(/bms/state,来自小脑 BLE 读 BMS)
 initBattery();
+// 调试页签(启动链路/dog_node + 终端日志转发,经 webserver 的 /api/debug/*)
+initDebugView();
 
 // 立即应用持久化的页签,避免刷新后先闪一下默认「话题调试」;
 // 此时模型可能未加载,重建逻辑均有 try/catch,模型就绪后会再应用一次

@@ -17,7 +17,7 @@
         if (mobile) location.replace('./mobile.html');
       })();
     </script>
-    <link rel="stylesheet" href="./css/style.css?v=1028" />
+    <link rel="stylesheet" href="./css/style.css?v=1032" />
     <script type="importmap">
       {
         "imports": {
@@ -100,10 +100,11 @@
           <button id="curves-tab" role="tab" aria-selected="false" aria-controls="curves-control-view" data-control-tab="curves">可视化</button>
           <button id="dashboard-tab" role="tab" aria-selected="false" aria-controls="dashboard-control-view" data-control-tab="dashboard">数据看板</button>
           <button id="camera-tab" role="tab" aria-selected="false" aria-controls="camera-control-view" data-control-tab="camera">相机</button>
-          <button id="lidar-tab" role="tab" aria-selected="false" aria-controls="lidar-control-view" data-control-tab="lidar">雷达</button>
+          <button id="lidar-tab" role="tab" aria-selected="false" aria-controls="lidar-control-view" data-control-tab="lidar">建图</button>
           <button id="maps-tab" role="tab" aria-selected="false" aria-controls="maps-control-view" data-control-tab="maps">地图管理</button>
           <button id="mission-tab" role="tab" aria-selected="false" aria-controls="mission-control-view" data-control-tab="mission">任务状态</button>
           <button id="mission-mgr-tab" role="tab" aria-selected="false" aria-controls="mission-mgr-control-view" data-control-tab="mission-mgr">任务管理</button>
+          <button id="debug-tab" role="tab" aria-selected="false" aria-controls="debug-control-view" data-control-tab="debug">调试</button>
         </div>
         <!-- 数据录制与复现页面:录制记录列表 -->
         <div id="config-control-view" class="control-view" role="tabpanel" aria-labelledby="config-tab" hidden>
@@ -443,6 +444,7 @@
                 <button type="button" id="lidar-btn-color" class="lidar-btn">着色:高度</button>
                 <button type="button" id="lidar-btn-acc" class="lidar-btn is-active">累加建图</button>
                 <button type="button" id="lidar-btn-clear" class="lidar-btn">清空</button>
+                <button type="button" id="lidar-btn-save" class="lidar-btn">保存地图到板上</button>
                 <button type="button" id="lidar-btn-record" class="lidar-btn">● 开始建图</button>
                 <label class="lidar-size-ctl">点大小
                   <input type="range" id="lidar-point-size" min="0.01" max="0.30" step="0.01" value="0.05" />
@@ -453,7 +455,27 @@
             </div>
             <div class="cam-stage">
               <canvas id="lidar-3d-canvas" class="lidar-canvas"></canvas>
-              <div id="lidar-placeholder" class="cam-placeholder">点「开始建图」后显示 3D 点云(世界系 · 可拖拽旋转/滚轮缩放)<br>点云来自 Point-LIO /cloud_registered_body(已去畸变、按里程计拼到世界系),同一批点会同时落盘成 pcd</div>
+              <div id="lidar-placeholder" class="cam-placeholder">等待点云…浏览器本地累积(相机双目点云 · 不落盘)<br>彩点来自相机自己的双目,自带颜色 · 可拖拽旋转/滚轮缩放 · 「保存地图到板上」落成 pcd</div>
+              <!-- SLAM 位姿 HUD:原频率(不节流)刷新;2s 无数据置灰 -->
+              <div id="lidar-pose-hud" class="lidar-pose-hud is-stale" title="Point-LIO 世界系位姿(原频率,不降采样)">
+                <div class="lidar-pose-head">SLAM 位姿<span class="lidar-pose-topic">/aft_mapped_to_init</span><span id="lidar-pose-hz" class="lidar-pose-hz">—</span></div>
+                <div class="lidar-pose-row">
+                  <span class="lidar-pose-dim">X<b id="lidar-pose-x">-</b></span>
+                  <span class="lidar-pose-dim">Y<b id="lidar-pose-y">-</b></span>
+                  <span class="lidar-pose-dim">Z<b id="lidar-pose-z">-</b></span>
+                  <span class="lidar-pose-dim">YAW<b id="lidar-pose-yaw">-</b></span>
+                </div>
+              </div>
+              <!-- 前端融合:相机小窗 + 上色状态。颜色是浏览器把累积地图投影进这幅画面取的,
+                   和板上 lidar_recorder 那套规则一致(只补没有颜色的点,先到先得) -->
+              <div id="lidar-color-hud" class="lidar-color-hud">
+                <canvas id="lidar-color-preview" class="lidar-color-canvas"></canvas>
+                <label class="lidar-color-opt" title="把本遍投影命中的雷达点画在画面上:深度边缘和画面里物体边缘对齐了,颜色才是对的(外参标定的判据)">
+                  <input type="checkbox" id="lidar-color-overlay" /> 叠加命中点
+                </label>
+                <div id="lidar-color-info" class="lidar-color-info">外参未就绪</div>
+                <div id="lidar-save-note" class="lidar-save-note"></div>
+              </div>
             </div>
             <div class="cam-meta-row">
               <span id="lidar-fps" class="cam-meta">— FPS</span>
@@ -653,6 +675,41 @@
             </section>
           </div>
         </div>
+        <!-- 调试:一键启动链路 / dog_node,终端日志经 webserver 的 /api/debug/* 转发 -->
+        <div id="debug-control-view" class="control-view" role="tabpanel" aria-labelledby="debug-tab" hidden>
+          <section class="camera-toolbar debug-toolbar">
+            <div class="lidar-tools">
+              <button type="button" id="debug-btn-refresh" class="lidar-btn">刷新状态</button>
+            </div>
+            <span class="cam-state">按钮经 webserver 起板上脚本(日志 ~/logs/);谁连上这个页面谁就能点</span>
+          </section>
+          <section class="camera-data debug-cards">
+            <div class="cam-card debug-card">
+              <div class="section-heading">
+                <h2>链路 · start_slam.sh</h2>
+                <span id="debug-state-slam" class="debug-badge">查询中…</span>
+              </div>
+              <div class="debug-actions">
+                <button type="button" id="debug-start-slam" class="debug-start-btn">▶ 启动链路</button>
+                <button type="button" id="debug-stop-slam" class="debug-stop-btn" disabled>■ 停止</button>
+                <span id="debug-msg-slam" class="debug-msg"></span>
+              </div>
+              <pre id="debug-log-slam" class="debug-terminal">点「启动链路」后,终端输出(雷达驱动 / Point-LIO / 小脑桥 / rosbridge / 建图录制 / 播报)实时显示在这里。</pre>
+            </div>
+            <div class="cam-card debug-card">
+              <div class="section-heading">
+                <h2>dog_node · dog_web.launch.py(网页驱动)</h2>
+                <span id="debug-state-dog" class="debug-badge">查询中…</span>
+              </div>
+              <div class="debug-actions">
+                <button type="button" id="debug-start-dog" class="debug-start-btn is-warn">▶ 启动 dog_node</button>
+                <button type="button" id="debug-stop-dog" class="debug-stop-btn" disabled>■ 停止</button>
+                <span id="debug-msg-dog" class="debug-msg"></span>
+              </div>
+              <pre id="debug-log-dog" class="debug-terminal">dog_node 起来后等网页「任务状态」页下发任务;任务过预检会让狗站起 —— 点之前先确认狗周围安全。</pre>
+            </div>
+          </section>
+        </div>
         <!-- ROS 话题调试:接收区(顶部全宽) + 话题列表/发送区(左右布局) -->
         <div id="rosdebug-control-view" class="control-view" role="tabpanel" aria-labelledby="rosdebug-tab">
           <!-- ① 接收区(顶部全宽) -->
@@ -716,6 +773,6 @@
         </div>
       </aside>
     </main>
-    <script type="module" src="./js/main.js?v=1071"></script>
+    <script type="module" src="./js/main.js?v=1077"></script>
   </body>
 </html>

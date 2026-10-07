@@ -2049,3 +2049,120 @@ canvas.cam-layer:not([hidden]) { image-rendering: pixelated; }
 .mission-params { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 4px; }
 .mission-param { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px;
                  font-size: 11px; color: var(--c-muted); }
+
+/* ── SLAM 位姿 HUD(雷达页签,2026-10-03)─────────────────────────
+   叠在点云画布左上;原频率刷新 /aft_mapped_to_init;2s 无数据 .is-stale 置灰 */
+.lidar-pose-hud {
+  position: absolute; left: 12px; top: 10px; z-index: 6;
+  padding: 9px 14px 11px;
+  border-radius: 12px;
+  background: rgba(10, 17, 28, 0.8);
+  border: 1px solid rgba(78, 213, 198, 0.38);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  font-family: var(--mono);
+  transition: opacity 0.2s;
+  max-width: calc(100% - 24px);
+}
+.lidar-pose-hud.is-stale { opacity: 0.42; border-color: var(--c-border); }
+.lidar-pose-head {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11px; letter-spacing: 0.4px; color: var(--c-accent);
+  margin-bottom: 6px; white-space: nowrap;
+}
+.lidar-pose-hud.is-stale .lidar-pose-head { color: var(--c-muted); }
+.lidar-pose-topic { color: var(--c-muted); font-size: 10px; }
+.lidar-pose-hz { margin-left: auto; color: var(--c-muted); font-size: 10px; }
+.lidar-pose-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.lidar-pose-dim {
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 10px; color: var(--c-muted); letter-spacing: 0.5px;
+}
+.lidar-pose-dim b {
+  font-size: 20px; line-height: 1; font-weight: 700;
+  color: var(--c-text); font-variant-numeric: tabular-nums;
+}
+.lidar-pose-hud.is-stale .lidar-pose-dim b { color: var(--c-muted); }
+
+/* ── 前端融合:相机小窗 + 上色状态(雷达页签右下,2026-10-06)───────
+   颜色是浏览器把累积地图投影进这幅画面取的(见 js/lidar-view.js)。
+   小窗同时是**外参标定**的工具:勾「叠加命中点」看雷达点落没落在正确物体上。 */
+.lidar-color-hud {
+  position: absolute; right: 12px; bottom: 10px; z-index: 6;
+  width: min(22%, 180px);
+  padding: 8px 10px 9px;
+  border-radius: 12px;
+  background: rgba(10, 17, 28, 0.82);
+  border: 1px solid var(--c-border);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  font-family: var(--mono);
+}
+/* 宽高比是**占位默认值**,真有画面后由 js 按实际尺寸改写(实测 1088x1920 竖构图) */
+.lidar-color-canvas {
+  display: block; width: 100%; aspect-ratio: 9 / 16;
+  border-radius: 8px; background: rgba(6, 11, 19, 0.9);
+}
+.lidar-color-opt {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 6px; font-size: 10.5px; color: var(--c-muted);
+  cursor: pointer; letter-spacing: 0.3px;
+}
+.lidar-color-opt input { accent-color: var(--c-accent); cursor: pointer; }
+.lidar-color-info {
+  margin-top: 4px; font-size: 10.5px; color: var(--c-muted);
+  letter-spacing: 0.3px; word-break: break-all;
+}
+/* 外参退回内置默认值时标黄 —— 那种情况颜色大概率是歪的,不能看着像"正常" */
+.lidar-color-info.is-warn { color: #e0b070; }
+.lidar-save-note {
+  margin-top: 3px; font-size: 10.5px; color: var(--c-accent);
+  letter-spacing: 0.3px; word-break: break-all; min-height: 0;
+}
+.lidar-save-note:empty { display: none; }
+/* 手机上点云画布本来就窄,小窗再叠上去会挡掉大半 —— 收窄一点 */
+@media (max-width: 720px) {
+  .lidar-color-hud { width: min(30%, 120px); right: 8px; bottom: 8px; }
+}
+
+/* ── 调试页签:启动按钮 + 终端日志(2026-10-03)─────────────────── */
+.debug-toolbar { margin-bottom: 10px; }
+.debug-cards { display: flex; flex-direction: column; gap: 14px; }
+.debug-actions { display: flex; align-items: center; gap: 12px; margin: 2px 0 10px; flex-wrap: wrap; }
+.debug-badge {
+  margin-left: auto; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+  background: rgba(122, 141, 165, 0.16); color: var(--c-muted);
+  font-family: var(--mono); white-space: nowrap;
+}
+.debug-badge.is-on { background: rgba(78, 213, 198, 0.16); color: var(--c-accent); }
+.debug-badge.is-ext { background: rgba(255, 196, 0, 0.16); color: #ffc400; }
+.debug-start-btn {
+  font-size: 14px; font-weight: 700; padding: 9px 18px; border-radius: 10px;
+  border: 1px solid rgba(78, 213, 198, 0.5);
+  background: rgba(78, 213, 198, 0.14); color: var(--c-accent);
+  cursor: pointer;
+}
+.debug-start-btn:hover { background: rgba(78, 213, 198, 0.24); }
+.debug-start-btn.is-warn {
+  border-color: rgba(255, 196, 0, 0.5);
+  background: rgba(255, 196, 0, 0.12); color: #ffc400;
+}
+.debug-start-btn.is-warn:hover { background: rgba(255, 196, 0, 0.22); }
+.debug-stop-btn {
+  font-size: 14px; font-weight: 700; padding: 9px 18px; border-radius: 10px;
+  border: 1px solid rgba(224, 112, 112, 0.5);
+  background: rgba(224, 112, 112, 0.12); color: var(--c-danger);
+  cursor: pointer;
+}
+.debug-stop-btn:hover:not(:disabled) { background: rgba(224, 112, 112, 0.24); }
+.debug-start-btn:disabled, .debug-stop-btn:disabled {
+  opacity: 0.45; cursor: not-allowed;
+}
+.debug-msg { font-size: 12px; color: var(--c-muted); }
+.debug-terminal {
+  margin: 0; padding: 10px 12px; min-height: 150px; max-height: 320px;
+  overflow: auto; resize: vertical;
+  background: #05090f; border: 1px solid var(--c-border); border-radius: 10px;
+  color: #b8c7d9; font-size: 11.5px; line-height: 1.5;
+  font-family: var(--mono);
+  white-space: pre-wrap; word-break: break-all;
+}
